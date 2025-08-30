@@ -34,7 +34,10 @@ import (
 // https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic
 const ghcrUsername = "USERNAME"
 
-func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostConfig *container.HostConfig, copyToContainer map[string]string, copyFromContainer map[string]string) {
+func RunGhcrContainer(taskName, imageLink string, flags []string, envCont []string, hostConfig *container.HostConfig, copyToContainer map[string]string, copyFromContainer map[string]string) {
+	logrus.Info("")
+	logrus.Infof("=== %s ===", taskName)
+
 	// Container configuration (equivalent to the docker run command options)
 	config := &container.Config{
 		Image:        imageLink,
@@ -67,7 +70,7 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 	var options = image.PullOptions{}
 
 	if strings.HasPrefix(imageLink, globals.GithubDockerHost) {
-		var password = globals.GithubToken
+		var password = globals.Config.Github.Token
 
 		if password == "" {
 			cfg, err := cliconfig.Load("")
@@ -96,16 +99,17 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 			}
 		}
 	}
+
 	reader, imagePullErr := cli.ImagePull(ctx, imageLink, options)
 	if imagePullErr == nil {
 		defer func() {
 			err = errors.Join(err, reader.Close())
 		}()
 
-		logrus.Infof("Pulling docker image: %s", imageLink)
+		logrus.Debugf("Pulling docker image: %s", imageLink)
 		// cli.ImagePull is asynchronous.
 		// The reader needs to be read completely for the pull operation to complete.
-		if globals.Quiet {
+		if globals.Config.Quiet {
 			// If stdout is not required, consider using io.Discard instead of os.Stdout.
 			_, _ = io.Copy(io.Discard, reader)
 		} else {
@@ -121,18 +125,18 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 			logrus.Fatalf("Unexpected error occurred while trying to use image %s: %s", imageLink, err)
 		}
 	} else {
-		logrus.Infof("Docker image: %s", imageLink)
-		logrus.Infof("Image os: %s", imageInspect.Os)
-		logrus.Infof("Imge arch: %s", imageInspect.Architecture)
+		logrus.Debugf("Docker image: %s", imageLink)
+		logrus.Debugf("Image os: %s", imageInspect.Os)
+		logrus.Debugf("Image arch: %s", imageInspect.Architecture)
 		if len(imageInspect.RepoTags) == 1 {
-			logrus.Infof("Docker tag: %s", imageInspect.RepoTags[0])
+			logrus.Debugf("Docker tag: %s", imageInspect.RepoTags[0])
 		} else if len(imageInspect.RepoTags) > 1 {
-			logrus.Infof("Docker tags:\n\t%s", strings.Join(imageInspect.RepoTags, "\n\t"))
+			logrus.Debugf("Docker tags:\n\t%s", strings.Join(imageInspect.RepoTags, "\n\t"))
 		}
 		if len(imageInspect.RepoDigests) == 1 {
-			logrus.Infof("Docker digest: %s", imageInspect.RepoDigests[0])
+			logrus.Debugf("Docker digest: %s", imageInspect.RepoDigests[0])
 		} else if len(imageInspect.RepoDigests) > 1 {
-			logrus.Infof("Docker digests:\n\t%s", strings.Join(imageInspect.RepoDigests, "\n\t"))
+			logrus.Debugf("Docker digests:\n\t%s", strings.Join(imageInspect.RepoDigests, "\n\t"))
 		}
 	}
 
@@ -141,9 +145,9 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 		logrus.Fatalf("Unexpected error occurred while trying to create Docker container: %s", err)
 	}
 
-	logrus.Infof("Container created ID: %s", resp.ID)
+	logrus.Debugf("Container created ID: %s", resp.ID)
 
-	logrus.Info("Start processing")
+	logrus.Infof("Start processing: %s", taskName)
 
 	for copyFrom, copyTo := range copyToContainer {
 		logrus.Debugf("Copy \"%v\" to container \"%v\"", copyFrom, copyTo)
@@ -158,6 +162,10 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		logrus.Fatalf("Unexpected error occurred while trying to start container: %s", err)
 	}
+
+	defer func() {
+		_ = cli.ContainerKill(ctx, resp.ID, "SIGKILL")
+	}()
 
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
@@ -183,13 +191,14 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 
 		duration := endTime.Sub(startTime)
 
-		logrus.Info("End processing")
-		logrus.Infof("Time: %vs", duration.Seconds())
+		logrus.Debugf("End processing")
+		logrus.Infof("Processing time: %vs", duration.Seconds())
 
 		// Get container logs and log them line by line at debug level
 		out, err := cli.ContainerLogs(ctx, resp.ID, container.LogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
+			Details:    false,
 		})
 		defer func() {
 			err = out.Close()
@@ -204,13 +213,15 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 				logrus.Fatalf("Unexpected error occurred while trying get logs from container: %s", err)
 			}
 			scanner := bufio.NewScanner(&sourceBuffer)
-			logrus.Debugf("Container log:")
+
+			var allLogs string
 			for scanner.Scan() {
-				logrus.Debugf("%s", scanner.Text())
+				allLogs += scanner.Text() + "\n"
 			}
 			if err := scanner.Err(); err != nil {
 				logrus.Debugf("Error reading container logs: %v", err)
 			}
+			logrus.Debugf("Container log:\n%s", allLogs)
 		}
 
 		if statusBody.StatusCode != 0 {
@@ -222,8 +233,11 @@ func RunGhcrContainer(imageLink string, flags []string, envCont []string, hostCo
 		logrus.Debugf("Copy \"%v\" from container to \"%v\"", copyFrom, copyTo)
 		err = CopyFileFromContainer(cli, ctx, resp.ID, copyFrom, copyTo)
 		if err != nil {
-			logrus.Errorf("Unexpected error occurred while trying to copy files from container: from %s to %s", copyFrom, copyTo)
-			logrus.Fatal(err)
+			logrus.Error(err)
+			if taskName == "Compile" {
+				logrus.Error("Try compile with flag --native")
+			}
+			logrus.Fatalf("There was a problem during the %s step, check the full logs: %s", taskName, globals.LogPath)
 		}
 	}
 	logrus.Debugf("Files copied from container: %v", len(copyFromContainer))

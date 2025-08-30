@@ -22,52 +22,57 @@ var ProjectPath string
 
 // compileCmd represents the compile command
 var compileCmd = &cobra.Command{
-	Use:   "compile <project>",
+	Use:   "compile project",
 	Short: "Compile your Java project",
 	Args:  cobra.MinimumNArgs(1), // require at least one argument
 	Long: `This command takes a required path to the project, automatically detects Java build system, modules and dependencies and compile project model.
 
 Arguments:
-  <project>  - the path to the project to compile (required)
+  project  - Path to a project to compile (required)
 `,
+	PreRun: func(cmd *cobra.Command, args []string) {
+		addCompileTypeFlag(cmd)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ProjectPath = args[0]
-		compile(OutputProjectModelPath, ProjectPath, globals.CompileType)
+
+		projectRoot := filepath.Clean(ProjectPath)
+		absProjectRoot := log.AbsPathOrExit(projectRoot, "project path")
+
+		outputProjectModelPath := filepath.Clean(OutputProjectModelPath)
+		absOutputProjectModelPath := log.AbsPathOrExit(outputProjectModelPath, "output")
+
+		logrus.Info()
+		logrus.Infof("=== Compile only mode ===")
+		logrus.Infof("Project: %s", absProjectRoot)
+		logrus.Infof("Project model write to: %s", absOutputProjectModelPath)
+
+		compile(absProjectRoot, absOutputProjectModelPath, globals.Config.Compile.Type)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(compileCmd)
 
-	compileCmd.Flags().StringVarP(&OutputProjectModelPath, "output", "o", "", `A path to the result project model`)
-	compileCmd.Flags().StringVar(&globals.CompileType, "compile-type", "docker", "Environment for run compile command (docker, native)")
+	compileCmd.Flags().StringVarP(&OutputProjectModelPath, "output", "o", "", `Path to the result project model`)
 	_ = compileCmd.MarkFlagRequired("output")
 }
 
-func compile(outputProjectModelPath, projectRoot, compileType string) {
-	logrus.Infof("Logging to file: %s", globals.LogPath)
-	outputProjectModelPath = filepath.Clean(outputProjectModelPath)
-	absOutputProjectModelPath := log.AbsPathOrExit(outputProjectModelPath, "output")
-
-	projectRoot = filepath.Clean(projectRoot)
-	absProjectRoot := log.AbsPathOrExit(projectRoot, "project path")
-
-	logrus.Infof("Build project: %s", absProjectRoot)
-	logrus.Infof("Result write to: %s", absOutputProjectModelPath)
-
+func compile(absProjectRoot, absOutputProjectModelPath, compileType string) {
 	if _, err := os.Stat(absOutputProjectModelPath); err == nil {
 		logrus.Fatalf("Output directory already exist: %s", absOutputProjectModelPath)
 	}
 
 	appendFlags := []string{}
 
-	switch globals.VerboseLevel {
+	switch globals.Config.Log.Verbosity {
 	case "info":
 		appendFlags = append(appendFlags, "--verbosity=info")
 	case "debug":
 		appendFlags = append(appendFlags, "--verbosity=debug")
 	}
 
+	logrus.Infof("Compile mode: %s", compileType)
 	switch compileType {
 	case "docker":
 		compileWithDocker(absOutputProjectModelPath, absProjectRoot, appendFlags)
@@ -75,6 +80,10 @@ func compile(outputProjectModelPath, projectRoot, compileType string) {
 		compileWithNative(absOutputProjectModelPath, absProjectRoot, appendFlags)
 	default:
 		logrus.Fatalf("compile-type must be one of \"docker\", \"native\"")
+	}
+
+	if _, err := os.Stat(absOutputProjectModelPath); err != nil {
+		logrus.Fatalf("There was a problem during the compile step, check the full logs: %s", globals.LogPath)
 	}
 }
 
@@ -101,18 +110,18 @@ func compileWithDocker(absOutputProjectModelPath, absProjectRoot string, appendF
 	var copyFromContainer = make(map[string]string)
 	copyFromContainer["/data/build"] = absOutputProjectModelPath
 
-	autobuilderImageLink := utils.GetImageLink(globals.AutobuilderVersion, globals.AutobuilderDocker)
-	container_run.RunGhcrContainer(autobuilderImageLink, autobuilderFlags, envCont, hostConfig, copyToContainer, copyFromContainer)
+	autobuilderImageLink := utils.GetImageLink(globals.Config.Autobuilder.Version, globals.AutobuilderDocker)
+	container_run.RunGhcrContainer("Compile", autobuilderImageLink, autobuilderFlags, envCont, hostConfig, copyToContainer, copyFromContainer)
 }
 
 func compileWithNative(absOutputProjectModelPath, absProjectRoot string, appendFlags []string) {
-	autobuilderJarPath, err := utils.GetAutobuilderJarPath(globals.AutobuilderVersion)
+	autobuilderJarPath, err := utils.GetAutobuilderJarPath(globals.Config.Autobuilder.Version)
 	if err != nil {
 		logrus.Fatalf("Unexpected error occurred while trying to construct path to the autobuilder: %s", err)
 	}
 
 	if _, err := os.Stat(autobuilderJarPath); errors.Is(err, os.ErrNotExist) {
-		err := utils.DownloadGithubReleaseAsset(globals.RepoOwner, globals.AutobuilderRepoName, globals.AutobuilderVersion, globals.AutobuilderAssetName, autobuilderJarPath, globals.GithubToken)
+		err := utils.DownloadGithubReleaseAsset(globals.RepoOwner, globals.AutobuilderRepoName, globals.Config.Autobuilder.Version, globals.AutobuilderAssetName, autobuilderJarPath, globals.Config.Github.Token)
 		if err != nil {
 			logrus.Fatalf("Unexpected error occurred while trying to download autobuilder: %s", err)
 		}
@@ -129,14 +138,15 @@ func compileWithNative(absOutputProjectModelPath, absProjectRoot string, appendF
 	autobuilderCommand = append(autobuilderCommand, appendFlags...)
 
 	cmd := exec.Command("java", autobuilderCommand...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Start()
+	out, err := cmd.CombinedOutput()
+	logrus.Debugf("Autobuilder output:\n%s", string(out))
+
 	if err != nil {
-		logrus.Fatalf("Unexpected error occurred while trying to start autobuilder: %s", err)
+		logrus.Fatalf("Autobuilder failed: %v", err)
 	}
-	err = cmd.Wait()
-	if err != nil {
-		logrus.Fatalf("Unexpected error occurred while trying to wait autobuilder: %s", err)
+
+	exitCode := cmd.ProcessState.ExitCode()
+	if exitCode != 0 {
+		logrus.Errorf("Autobuilder exited with code %d", exitCode)
 	}
 }

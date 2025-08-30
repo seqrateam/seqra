@@ -1,5 +1,9 @@
 package globals
 
+import (
+	"time"
+)
+
 const GithubDockerHost = "ghcr.io"
 
 const RepoOwner = "seqrateam"
@@ -13,14 +17,45 @@ const AutobuilderBindVersion = "2025.08.28.6def5f5"
 const AutobuilderAssetName = "seqra-project-auto-builder.jar"
 
 const RulesRepoName = "seqra-rules"
-const RulesBindVersion = "v1.0.0"
+const RulesBindVersion = "v1.0.1"
 
-var AnalyzerVersion string
-var AutobuilderVersion string
-var VerboseLevel string
-var Quiet bool
-var GithubToken string
+type Compile struct {
+	Type string `mapstructure:"type"`
+}
 
-var CompileType string
+type Scan struct {
+	Timeout time.Duration `mapstructure:"timeout"`
+	Ruleset string        `mapstructure:"ruleset"`
+}
+
+type Log struct {
+	Verbosity string `mapstructure:"verbosity"`
+}
+
+type Github struct {
+	Token string `mapstructure:"token"`
+}
+
+type Analyzer struct {
+	Version string `mapstructure:"version"`
+}
+
+type Autobuilder struct {
+	Version string `mapstructure:"version"`
+}
+
+type ConfigType struct {
+	Scan        Scan        `mapstructure:"scan"`
+	Log         Log         `mapstructure:"log"`
+	Github      Github      `mapstructure:"github"`
+	Analyzer    Analyzer    `mapstructure:"analyzer"`
+	Autobuilder Autobuilder `mapstructure:"autobuilder"`
+	Compile     Compile     `mapstructure:"compile"`
+	Quiet       bool        `mapstructure:"quiet"`
+}
+
+var Config ConfigType
 
 var LogPath string
+
+var ConfigFile string

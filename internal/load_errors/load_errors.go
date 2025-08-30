@@ -167,12 +167,20 @@ func (semgrepLoadErrors ErrorsList) UpdateRuleId(absRulesPath, userRulesPath str
 
 // SaveErrorsListToFile writes a list of AbstractSemgrepError nodes to a JSON file.
 func SaveErrorsListToFile(errs ErrorsList, filename string) error {
-	b, err := json.MarshalIndent(errs, "", "  ")
+	file, err := os.Create(filename)
 	if err != nil {
-		return fmt.Errorf("marshal error: %w", err)
+		return fmt.Errorf("failed to create file: %w", err)
 	}
-	if writeErr := os.WriteFile(filename, b, 0o644); writeErr != nil {
-		return fmt.Errorf("write file error: %w", writeErr)
+	defer func() {
+		_ = file.Close()
+	}()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+
+	if err := enc.Encode(errs); err != nil {
+		return fmt.Errorf("failed to encode errors list: %w", err)
 	}
 	return nil
 }

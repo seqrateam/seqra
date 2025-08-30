@@ -167,15 +167,16 @@ func GenerateSummary(report *Report) Summary {
 func PrintSummary(report *Report) {
 	summary := GenerateSummary(report)
 
-	fmt.Print("=== Scan Results Summary ===\n")
-	fmt.Printf("Total findings: %d\n", summary.TotalFindings)
-	fmt.Printf("Total rules run: %d\n", summary.TotalRulesRun)
-	fmt.Printf("Total rules triggered: %d\n", summary.TotalRulesTriggered)
+	logrus.Info()
+	logrus.Info("=== Scan Results Summary ===")
+	logrus.Infof("Total findings: %d", summary.TotalFindings)
+	logrus.Infof("Total rules run: %d", summary.TotalRulesRun)
+	logrus.Infof("Total rules triggered: %d", summary.TotalRulesTriggered)
 
 	if len(summary.FindingsByLevel) > 0 {
-		fmt.Print("Findings by severity:\n")
+		logrus.Info("Findings by severity:")
 		for level, count := range summary.FindingsByLevel {
-			fmt.Printf("  %s: %d\n", level, count)
+			logrus.Infof("  %s: %d", level, count)
 		}
 	}
 }
@@ -260,9 +261,19 @@ func (report *Report) UpdateRuleId(absRulesPath, userRulesPath string) {
 
 // WriteFile writes the SARIF report to a file
 func WriteFile(report *Report, filename string) error {
-	data, err := json.MarshalIndent(report, "", "  ")
+	file, err := os.Create(filename)
 	if err != nil {
-		return fmt.Errorf("failed to marshal SARIF: %w", err)
+		return fmt.Errorf("failed to create file: %w", err)
 	}
-	return os.WriteFile(filename, data, 0644)
+	defer func() {
+		_ = file.Close()
+	}()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(report); err != nil {
+		return fmt.Errorf("failed to encode SARIF: %w", err)
+	}
+	return nil
 }

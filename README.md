@@ -44,14 +44,14 @@ The [core analysis engine](https://github.com/seqra/seqra-jvm-sast) is source-av
   *One-liner install:*
 
   ```bash
-  curl -L https://github.com/seqra/seqra/releases/latest/download/seqra_linux_x86_64.tar.gz -o seqra.tar.gz && tar -xzf seqra.tar.gz seqra && sudo mv seqra /usr/local/bin/ && rm seqra.tar.gz && seqra --version
+  curl -L https://github.com/seqra/seqra/releases/latest/download/seqra_linux_amd64.tar.gz -o seqra.tar.gz && tar -xzf seqra.tar.gz seqra && sudo mv seqra /usr/local/bin/ && rm seqra.tar.gz && seqra --version
   ```
 
   *Step-by-step:*
 
   ```bash
   # 1. Download
-  curl -L https://github.com/seqra/seqra/releases/latest/download/seqra_linux_x86_64.tar.gz -o seqra.tar.gz
+  curl -L https://github.com/seqra/seqra/releases/latest/download/seqra_linux_amd64.tar.gz -o seqra.tar.gz
 
   # 2. Extract
   tar -xzf seqra.tar.gz seqra
@@ -137,20 +137,16 @@ For seamless integration with your CI/CD pipelines, check out our dedicated inte
 
 ## Troubleshooting
 
-### Docker-related Issues
-- **Docker not running**
+### Docker not running
   - Ensure Docker is installed and running on your system
   - Run `docker info` to verify Docker is accessible
 
 ### Build Issues
-- **Project build failed**
-  - Ensure your Java project builds successfully with its native build tools, currently, only Maven and Gradle projects are supported
-
-- **Missing dependencies in Docker**
-  - If the Docker image lacks required dependencies, use `seqra scan --native` to build the project directly on your machine instead
+  > **Note:** **only Maven and Gradle projects are supported**
+  - Ensure your Java project builds successfully with its native build tools
+  - If the Docker image lacks required dependencies, use `seqra scan --compile-type native --output /path/project/model /path/to/your/project` to build the project directly on your machine instead
 
 ### Logs and Debugging
-- **Enable verbose logging**
   - Run with `--verbosity debug` for detailed logs
   - Check the log file at `~/.seqra/logs/`
 
