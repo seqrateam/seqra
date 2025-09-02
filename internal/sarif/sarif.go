@@ -176,9 +176,18 @@ func (report *Report) PrintSummary() {
 
 	if len(summary.FindingsByLevel) > 0 {
 		logrus.Info("Findings by severity:")
-		for level, count := range summary.FindingsByLevel {
-			logrus.Infof("  %s: %d", level, count)
-		}
+		LogFindings(summary, "error")
+		LogFindings(summary, "warning")
+		LogFindings(summary, "note")
+	}
+}
+
+func LogFindings(summary Summary, level string) {
+	count, val := summary.FindingsByLevel[level]
+	if val {
+		logrus.Infof("  %s: %d", level, count)
+	} else {
+		logrus.Infof("  %s: %d", level, 0)
 	}
 }
 

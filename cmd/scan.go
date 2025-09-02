@@ -40,7 +40,7 @@ Arguments:
 `,
 	Annotations: map[string]string{"PrintConfig": "true"},
 	PreRun: func(cmd *cobra.Command, args []string) {
-		addCompileTypeFlag(cmd)
+		bindCompileTypeFlag(cmd)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		UserProjectPath = args[0]
@@ -57,6 +57,7 @@ func init() {
 	scanCmd.Flags().StringVar(&globals.Config.Scan.Ruleset, "ruleset", "", "Directory containing YAML rules")
 	_ = viper.BindPFlag("scan.ruleset", scanCmd.Flags().Lookup("ruleset"))
 
+	scanCmd.Flags().StringVar(&globals.Config.Compile.Type, "compile-type", "docker", "Environment for run compile command (docker, native)")
 	scanCmd.Flags().StringVar(&RuleSetLoadErrorsPath, "ruleset-load-errors", "", "Path to log ruleset load errors")
 	scanCmd.Flags().BoolVar(&SemgrepCompatibilitySarif, "semgrep-compatibility-sarif", true, "Use Semgrep compatible ruleId")
 	scanCmd.Flags().StringVarP(&SarifReportPath, "output", "o", "", "Path to the SARIF-report output file")

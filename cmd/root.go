@@ -85,6 +85,7 @@ func init() {
 	_ = viper.BindPFlag("autobuilder.version", rootCmd.PersistentFlags().Lookup("autobuilder-version"))
 
 	rootCmd.PersistentFlags().StringVar(&globals.Config.Github.Token, "github-token", "", "Token for docker image pull from ghcr.io")
+	_ = rootCmd.PersistentFlags().MarkHidden("github-token")
 	_ = viper.BindPFlag("github.token", rootCmd.PersistentFlags().Lookup("github-token"))
 }
 
@@ -103,7 +104,6 @@ func initConfig() {
 	_ = viper.Unmarshal(&globals.Config)
 }
 
-func addCompileTypeFlag(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&globals.Config.Compile.Type, "compile-type", "docker", "Environment for run compile command (docker, native)")
-	_ = viper.BindPFlag("compile.type", cmd.PersistentFlags().Lookup("compile-type"))
+func bindCompileTypeFlag(cmd *cobra.Command) {
+	_ = viper.BindPFlag("compile.type", cmd.Flags().Lookup("compile-type"))
 }

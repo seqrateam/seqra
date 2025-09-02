@@ -32,7 +32,7 @@ Arguments:
 `,
 	Annotations: map[string]string{"PrintConfig": "true"},
 	PreRun: func(cmd *cobra.Command, args []string) {
-		addCompileTypeFlag(cmd)
+		bindCompileTypeFlag(cmd)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ProjectPath = args[0]
@@ -57,6 +57,8 @@ func init() {
 
 	compileCmd.Flags().StringVarP(&OutputProjectModelPath, "output", "o", "", `Path to the result project model`)
 	_ = compileCmd.MarkFlagRequired("output")
+
+	compileCmd.Flags().StringVar(&globals.Config.Compile.Type, "compile-type", "docker", "Environment for run compile command (docker, native)")
 }
 
 func compile(absProjectRoot, absOutputProjectModelPath, compileType string) {

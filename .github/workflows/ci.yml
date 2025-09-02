@@ -64,5 +64,5 @@ jobs:
 
       - name: Run seqra separate compile and scan
         run: |
-          ./seqra compile --quiet --github-token ${{ secrets.SEQRA_GITHUB_TOKEN }} --output portable-project project-root
+          ./seqra compile --quiet --compile-type docker --github-token ${{ secrets.SEQRA_GITHUB_TOKEN }} --output portable-project project-root
           ./seqra scan --quiet --github-token ${{ secrets.SEQRA_GITHUB_TOKEN }} --output report.sarif portable-project
