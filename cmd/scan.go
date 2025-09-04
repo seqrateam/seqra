@@ -203,7 +203,7 @@ func scan() {
 	analyzerImageLink := utils.GetImageLink(globals.Config.Analyzer.Version, globals.AnalyzerDocker)
 
 	if tempProjectModel {
-		compile(absUserProjectRoot, tempProjectModelPath, "docker")
+		compile(absUserProjectRoot, tempProjectModelPath, globals.Config.Compile.Type)
 	}
 
 	container_run.RunGhcrContainer("Scan", analyzerImageLink, analyzerFlags, envCont, hostConfig, copyToContainer, copyFromContainer)
